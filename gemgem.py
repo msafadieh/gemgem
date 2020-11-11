@@ -19,11 +19,12 @@ MAX_REQUEST_SIZE = 1026
 DEFAULT_QSIZE = 32
 DEFAULT_THREADS = 4
 
-DEFAULT_HOST = ''
+DEFAULT_HOST = ""
 DEFAULT_PORT = 1965
 DEFAULT_CERTFILE = "cert.pem"
 DEFAULT_KEYFILE = "key.pem"
 DEFAULT_WEBROOT = "."
+
 
 def create_context(certfile, keyfile):
     """
@@ -36,6 +37,7 @@ def create_context(certfile, keyfile):
     context.load_cert_chain(certfile=certfile, keyfile=keyfile)
     return context
 
+
 def create_socket(host, port):
     """
     Creates TCP socket and starts listening
@@ -44,9 +46,15 @@ def create_socket(host, port):
     port: port to bind to
     """
     gemsocket = socket.socket()
-    gemsocket.bind((host, port, ))
+    gemsocket.bind(
+        (
+            host,
+            port,
+        )
+    )
     gemsocket.listen()
     return gemsocket
+
 
 def create_response(status, meta, body=b""):
     """
@@ -60,6 +68,7 @@ def create_response(status, meta, body=b""):
     response = f"{status} {meta}\r\n".encode() + body
     return response
 
+
 def parse_url(raw_url, webroot):
     """
     Parses URL in Gemini response headers and returns
@@ -72,8 +81,8 @@ def parse_url(raw_url, webroot):
     parsed_url = urlparse(raw_url)
 
     url_path = parsed_url.path
-    if not parsed_url.path.endswith('/'):
-        url_path += '/'
+    if not parsed_url.path.endswith("/"):
+        url_path += "/"
 
     resolved_path = urljoin(url2pathname(url_path), ".")
     path_obj = pathlib.Path(webroot + "/" + resolved_path)
@@ -82,6 +91,7 @@ def parse_url(raw_url, webroot):
         path_obj = pathlib.Path(path_obj, "index.gem")
 
     return path_obj
+
 
 def get_mimetype(filename):
     """
@@ -130,6 +140,7 @@ def handle_request(stream, webroot):
 
     stream.sendall(resp)
 
+
 def thread_loop(queue, webroot):
     """
     Worker thread
@@ -149,6 +160,7 @@ def thread_loop(queue, webroot):
             stream.shutdown(socket.SHUT_RDWR)
             stream.close()
 
+
 def start_threads(count, queue, webroot):
     """
     Starts workers threads
@@ -158,7 +170,14 @@ def start_threads(count, queue, webroot):
     webroot: string representation of webroot path
     """
     for _ in range(count):
-        Thread(target=thread_loop, args=(queue, webroot, )).start()
+        Thread(
+            target=thread_loop,
+            args=(
+                queue,
+                webroot,
+            ),
+        ).start()
+
 
 def stop_threads(count, queue):
     """
@@ -169,6 +188,7 @@ def stop_threads(count, queue):
     """
     for _ in range(count):
         queue.put_nowait(None)
+
 
 def server_loop(gemsocket, ssl_context, queue):
     """
@@ -185,6 +205,7 @@ def server_loop(gemsocket, ssl_context, queue):
 
         queue.put(stream)
 
+
 def parse_args():
     """
     Parses command line arguments
@@ -192,12 +213,23 @@ def parse_args():
     parser = ArgumentParser(description="A multi-threaded gemini server")
     parser.add_argument("-b", "--host", default=DEFAULT_HOST, help="Host to bind to")
     parser.add_argument("-p", "--port", default=DEFAULT_PORT, help="Port to bind to")
-    parser.add_argument("-c", "--cert", default=DEFAULT_CERTFILE, help="SSL certificate in PEM format")
-    parser.add_argument("-k", "--key", default=DEFAULT_KEYFILE, help="SSL private key in PEM format")
-    parser.add_argument("-w", "--webroot", default=DEFAULT_WEBROOT, help="Webroot directory")
-    parser.add_argument("-q", "--queue", default=DEFAULT_QSIZE, help="Size of request queue")
-    parser.add_argument("-t", "--threads", default=DEFAULT_THREADS, help="Number of threads")
+    parser.add_argument(
+        "-c", "--cert", default=DEFAULT_CERTFILE, help="SSL certificate in PEM format"
+    )
+    parser.add_argument(
+        "-k", "--key", default=DEFAULT_KEYFILE, help="SSL private key in PEM format"
+    )
+    parser.add_argument(
+        "-w", "--webroot", default=DEFAULT_WEBROOT, help="Webroot directory"
+    )
+    parser.add_argument(
+        "-q", "--queue", default=DEFAULT_QSIZE, help="Size of request queue"
+    )
+    parser.add_argument(
+        "-t", "--threads", default=DEFAULT_THREADS, help="Number of threads"
+    )
     return parser.parse_args()
+
 
 def main():
     """
@@ -217,6 +249,7 @@ def main():
         stop_threads(args.threads, queue)
         gemsocket.shutdown(socket.SHUT_RDWR)
         gemsocket.close()
+
 
 if __name__ == "__main__":
     main()
