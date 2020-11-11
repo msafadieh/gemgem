@@ -19,7 +19,7 @@ MAX_REQUEST_SIZE = 1026
 DEFAULT_QSIZE = 32
 DEFAULT_THREADS = 4
 
-DEFAULT_HOST = '' 
+DEFAULT_HOST = ''
 DEFAULT_PORT = 1965
 DEFAULT_CERTFILE = "cert.pem"
 DEFAULT_KEYFILE = "key.pem"
@@ -111,18 +111,22 @@ def handle_request(stream, webroot):
     webroot: string representation of webroot path
     """
     data = stream.recv(MAX_REQUEST_SIZE)
-    path = parse_url(data.decode("utf-8").rstrip("\r\n"), webroot)
+    try:
+        path = parse_url(data.decode("utf-8").rstrip("\r\n"), webroot)
 
-    if not path.exists():
-        resp = create_response(40, "Not found")
+        if not path.exists():
+            resp = create_response(40, "Not found")
 
-    else:
+        else:
 
-        mime = get_mimetype(str(path))
+            mime = get_mimetype(str(path))
 
-        with path.open("rb") as file_stream:
-            content = file_stream.read()
-            resp = create_response(20, mime, content)
+            with path.open("rb") as file_stream:
+                content = file_stream.read()
+                resp = create_response(20, mime, content)
+
+    except PermissionError:
+        resp = create_response(40, "Access denied")
 
     stream.sendall(resp)
 
