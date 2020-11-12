@@ -16,7 +16,7 @@ An SSL certificate and private key are mandatory per the Gemini specifications. 
 
 ```
 usage: gemgem.py [-h] [-b HOST] [-p PORT] [-c CERT] [-k KEY] [-w WEBROOT]
-                 [-q QUEUE] [-t THREADS]
+                 [-q QUEUE] [-t THREADS] [-u UID] [-g GID]
 
 A multi-threaded gemini server
 
@@ -32,4 +32,6 @@ optional arguments:
                         Size of request queue
   -t THREADS, --threads THREADS
                         Number of threads
+  -u UID, --uid UID     uid to use after loading SSL certificate
+  -g GID, --gid GID     gid to use after loading SSL certificate
 ```

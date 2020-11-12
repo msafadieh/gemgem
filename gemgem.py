@@ -6,6 +6,7 @@ Minimalistic Gemini server
 """
 from argparse import ArgumentParser
 import mimetypes
+from os import setgid, setuid
 import pathlib
 from queue import Queue
 import socket
@@ -245,6 +246,20 @@ def parse_args():
     parser.add_argument(
         "-t", "--threads", default=DEFAULT_THREADS, help="Number of threads"
     )
+    parser.add_argument(
+        "-u",
+        "--uid",
+        default=0,
+        type=int,
+        help="uid to use after loading SSL certificate",
+    )
+    parser.add_argument(
+        "-g",
+        "--gid",
+        default=0,
+        type=int,
+        help="gid to use after loading SSL certificate",
+    )
     return parser.parse_args()
 
 
@@ -253,9 +268,15 @@ def main():
     Entrypoint function.
     """
     args = parse_args()
-    queue = Queue(maxsize=args.queue)
     context = create_context(args.cert, args.key)
 
+    if args.gid:
+        setgid(args.gid)
+
+    if args.uid:
+        setuid(args.uid)
+
+    queue = Queue(maxsize=args.queue)
     try:
         start_threads(args.threads, queue, args.webroot)
         with create_socket(args.host, args.port) as gemsocket:
