@@ -21,7 +21,6 @@ DEFAULT_THREADS = 4
 
 DEFAULT_HOST = ""
 DEFAULT_PORT = 1965
-DEFAULT_HOST_V6 = "::1"
 DEFAULT_CERTFILE = "cert.pem"
 DEFAULT_KEYFILE = "key.pem"
 DEFAULT_WEBROOT = "."
@@ -39,22 +38,18 @@ def create_context(certfile, keyfile):
     return context
 
 
-def create_socket(host, port, ipv6=False):
+def create_socket(host, port):
     """
     Creates TCP socket and starts listening
 
     host: host to bind to
     port: port to bind to
-    ipv6: whether to create IPv6 socket or not
     """
-    family = socket.AF_INET6 if ipv6 else socket.AF_INET
-    gemsocket = socket.socket(family=family)
-    gemsocket.bind(
-        (
-            host,
-            port,
-        )
-    )
+    addr = (host, port, )
+    if socket.has_dualstack_ipv6():
+        gemsocket = socket.create_server(addr, family=socket.AF_INET6, dualstack_ipv6=True)
+    else:
+        gemsocket = socket.create_server(addr)
     gemsocket.listen()
     return gemsocket
 
@@ -200,13 +195,9 @@ def server_loop(gemsocket, ssl_context, queue):
     """
     while True:
 
-        try:
-            connsocket, _ = gemsocket.accept()
-            stream = ssl_context.wrap_socket(connsocket, server_side=True)
-
-            queue.put(stream)
-        except OSError:
-            break
+        connsocket, _ = gemsocket.accept()
+        stream = ssl_context.wrap_socket(connsocket, server_side=True)
+        queue.put(stream)
 
 
 def parse_args():
@@ -216,9 +207,6 @@ def parse_args():
     parser = ArgumentParser(description="A multi-threaded gemini server")
     parser.add_argument("-b", "--host", default=DEFAULT_HOST, help="Host to bind to")
     parser.add_argument("-p", "--port", default=DEFAULT_PORT, help="Port to bind to")
-    parser.add_argument("-6", "--ipv6", action="store_true", help="Enable IPv6")
-    parser.add_argument("-b6", "--host-v6", default=DEFAULT_HOST_V6, help="IPv6 host to bind to")
-    parser.add_argument("-p6", "--port-v6", default=DEFAULT_PORT, help="IPv6 port to bind to")
     parser.add_argument(
         "-c", "--cert", default=DEFAULT_CERTFILE, help="SSL certificate in PEM format"
     )
@@ -241,27 +229,19 @@ def main():
     """
     Entrypoint function.
     """
-    gemsocketv6 = None
-
     args = parse_args()
     queue = Queue(maxsize=args.queue)
     context = create_context(args.cert, args.key)
+
     try:
         start_threads(args.threads, queue, args.webroot)
-        gemsocket = create_socket(args.host, args.port)
-        if args.ipv6:
-            gemsocketv6 = create_socket(args.host_v6, args.port_v6, True)
-            Thread(target=server_loop, args=(gemsocketv6, context, queue, )).start()
-        server_loop(gemsocket, context, queue)
+        with create_socket(args.host, args.port) as gemsocket:
+            server_loop(gemsocket, context, queue)
+
     except (KeyboardInterrupt, SystemExit):
         print("Received SIGINT. Shutting down...")
     finally:
         stop_threads(args.threads, queue)
-        gemsocket.shutdown(socket.SHUT_RDWR)
-        gemsocket.close()
-        if args.ipv6 and gemsocketv6:
-            gemsocketv6.shutdown(socket.SHUT_RDWR)
-            gemsocketv6.close()
 
 
 if __name__ == "__main__":
