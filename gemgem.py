@@ -4,6 +4,7 @@ Minimalistic Gemini server
 !!! WARNING: Do not use in production !!!
 """
 from argparse import ArgumentParser
+import mimetypes
 import pathlib
 from queue import Queue
 import socket
@@ -11,7 +12,6 @@ import ssl
 from threading import Thread
 from urllib.request import url2pathname
 from urllib.parse import urljoin, urlparse
-import magic
 
 # Gemini request is <URL><CR><LF> where <URL> is 1024-bytes
 MAX_REQUEST_SIZE = 1026
@@ -24,6 +24,9 @@ DEFAULT_PORT = 1965
 DEFAULT_CERTFILE = "cert.pem"
 DEFAULT_KEYFILE = "key.pem"
 DEFAULT_WEBROOT = "."
+
+mimetypes.add_type("text/gemini", ".gmi")
+mimetypes.add_type("text/gemini", ".gemini")
 
 
 def create_context(certfile, keyfile):
@@ -45,9 +48,14 @@ def create_socket(host, port):
     host: host to bind to
     port: port to bind to
     """
-    addr = (host, port, )
+    addr = (
+        host,
+        port,
+    )
     if socket.has_dualstack_ipv6():
-        gemsocket = socket.create_server(addr, family=socket.AF_INET6, dualstack_ipv6=True)
+        gemsocket = socket.create_server(
+            addr, family=socket.AF_INET6, dualstack_ipv6=True
+        )
     else:
         gemsocket = socket.create_server(addr)
     gemsocket.listen()
@@ -97,16 +105,12 @@ def get_mimetype(filename):
 
     filename: string representation of file's path
     """
-    magic_obj = magic.open(magic.MAGIC_MIME)
-    magic_obj.load()
+    mime, mime_sub = mimetypes.guess_type(filename)
 
-    mime = magic_obj.file(filename)
-
-    if mime.startswith("text/plain"):
-        if filename.endswith(".gmi") or filename.endswith(".gemini"):
-            mime = "text/gemini; charset=utf-8"
-        else:
-            mime = "text/plain; charset=utf-8"
+    if not mime:
+        mime = "application/octet-stream"
+    elif mime_sub:
+        mime = f"{mime}+{mime_sub}"
 
     return mime
 
