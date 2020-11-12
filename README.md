@@ -8,7 +8,7 @@ Do not use in production. I only wrote this to learn more about TCP/IP and Pytho
 
 ## Requirements
 
-- Python 3.7+
+- Python 3.8+
 - python-magic
 
 ## Usage
