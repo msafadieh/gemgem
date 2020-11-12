@@ -1,3 +1,4 @@
+#! /usr/bin/env python3
 """
 Minimalistic Gemini server
 
@@ -78,25 +79,36 @@ def create_response(status, meta, body=b""):
 def parse_url(raw_url, webroot):
     """
     Parses URL in Gemini response headers and returns
-    a Path object
+    a tuple (path, err). On success, path is a Path object
+    and err is None. On failure, path is None and err is
+    a byte-string representing a Gemini response
 
     raw_url: URL in the gemini headers with the CRLF sequence
     webroot: string representation of webroot path
     """
-    print(raw_url)
-    parsed_url = urlparse(raw_url)
+
+    try:
+        parsed_url = urlparse(raw_url)
+    except ValueError:
+        return None, create_response(59, "Malformed URI")
+
+    if parsed_url.scheme not in (None, "", "gemini"):
+        return None, create_response(53, "Proxying is not supported")
 
     url_path = parsed_url.path
     if not parsed_url.path.endswith("/"):
         url_path += "/"
 
-    resolved_path = urljoin(url2pathname(url_path), ".")
-    path_obj = pathlib.Path(webroot + "/" + resolved_path)
+    decoded_path = url2pathname(url_path)
+    safe_path = urljoin(decoded_path, ".")
+    path_obj = pathlib.Path(webroot + "/" + safe_path)
 
     while path_obj.is_dir():
         path_obj = pathlib.Path(path_obj, "index.gmi")
 
-    return path_obj
+    print(f"{raw_url} => {path_obj}")
+
+    return path_obj, None
 
 
 def get_mimetype(filename):
@@ -124,9 +136,12 @@ def handle_request(stream, webroot):
     """
     data = stream.recv(MAX_REQUEST_SIZE)
     try:
-        path = parse_url(data.decode("utf-8").rstrip("\r\n"), webroot)
+        path, err = parse_url(data.decode("utf-8").rstrip("\r\n"), webroot)
 
-        if not path.exists():
+        if err:
+            resp = err
+
+        elif not path.exists():
             resp = create_response(51, "Not found")
 
         else:
@@ -136,6 +151,9 @@ def handle_request(stream, webroot):
             with path.open("rb") as file_stream:
                 content = file_stream.read()
                 resp = create_response(20, mime, content)
+
+    except UnicodeError:
+        resp = create_response(59, "Bad encoding")
 
     except PermissionError:
         resp = create_response(51, "Access denied")
