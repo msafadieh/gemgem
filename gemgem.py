@@ -88,7 +88,7 @@ def parse_url(raw_url, webroot):
     path_obj = pathlib.Path(webroot + "/" + resolved_path)
 
     while path_obj.is_dir():
-        path_obj = pathlib.Path(path_obj, "index.gem")
+        path_obj = pathlib.Path(path_obj, "index.gmi")
 
     return path_obj
 
@@ -105,7 +105,7 @@ def get_mimetype(filename):
     mime = magic_obj.file(filename)
 
     if mime.startswith("text/plain"):
-        if filename.endswith(".gem") or filename.endswith(".gemini"):
+        if filename.endswith(".gmi") or filename.endswith(".gemini"):
             mime = "text/gemini; charset=utf-8"
         else:
             mime = "text/plain; charset=utf-8"
@@ -125,7 +125,7 @@ def handle_request(stream, webroot):
         path = parse_url(data.decode("utf-8").rstrip("\r\n"), webroot)
 
         if not path.exists():
-            resp = create_response(40, "Not found")
+            resp = create_response(51, "Not found")
 
         else:
 
@@ -136,7 +136,7 @@ def handle_request(stream, webroot):
                 resp = create_response(20, mime, content)
 
     except PermissionError:
-        resp = create_response(40, "Access denied")
+        resp = create_response(51, "Access denied")
 
     stream.sendall(resp)
 
