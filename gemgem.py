@@ -37,7 +37,8 @@ def create_context(certfile, keyfile):
     certfile: path to SSL certificate
     keyfile: path to SSL private key
     """
-    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+    context.options |= ssl.OP_NO_TLSv1 | ssl.OP_NO_TLSv1_1
     context.load_cert_chain(certfile=certfile, keyfile=keyfile)
     return context
 
