@@ -160,7 +160,7 @@ def handle_request(stream, webroot):
     except PermissionError:
         resp = create_response(51, "Access denied")
 
-    stream.sendall(resp)
+    return resp
 
 
 def thread_loop(queue, webroot):
@@ -177,7 +177,12 @@ def thread_loop(queue, webroot):
             break
 
         with stream:
-            handle_request(stream, webroot)
+            try:
+                resp = handle_request(stream, webroot)
+            except OSError:
+                resp = create_response(59, "Malformed request")
+            finally:
+                stream.sendall(resp)
 
 
 def start_threads(count, queue, webroot):
