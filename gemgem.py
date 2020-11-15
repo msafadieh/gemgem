@@ -5,6 +5,7 @@ Minimalistic Gemini server
 !!! WARNING: Do not use in production !!!
 """
 from argparse import ArgumentParser
+from ipaddress import ip_address
 import mimetypes
 from os import setgid, setuid
 import pathlib
@@ -65,16 +66,15 @@ def create_socket(host, port):
     return gemsocket
 
 
-def create_response(status, meta, body=b""):
+def create_response(status, meta, path=""):
     """
-    Create byte-encoded gemini response in the form
-    of <STATUS><SPACE><META><CR><LF><BODY>
+    Create tuple representing gemini response
 
     status: two-digit gemini status code
     meta: response info depending on status
-    body: optional body to include in response
+    body: optional path to file to include in response body
     """
-    response = f"{status} {meta}\r\n".encode() + body
+    response = status, meta, path
     return response
 
 
@@ -94,6 +94,9 @@ def parse_url(raw_url, webroot):
     except ValueError:
         return None, create_response(59, "Malformed URI")
 
+    if not parsed_url.netloc:
+        return None, create_response(59, "Missing host in URI")
+
     if parsed_url.scheme not in (None, "", "gemini"):
         return None, create_response(53, "Proxying is not supported")
 
@@ -104,11 +107,6 @@ def parse_url(raw_url, webroot):
     decoded_path = url2pathname(url_path)
     safe_path = urljoin(decoded_path, ".")
     path_obj = pathlib.Path(webroot + "/" + safe_path)
-
-    while path_obj.is_dir():
-        path_obj = pathlib.Path(path_obj, "index.gmi")
-
-    print(f"{raw_url} => {path_obj}")
 
     return path_obj, None
 
@@ -129,38 +127,66 @@ def get_mimetype(filename):
     return mime
 
 
-def handle_request(stream, webroot):
+def handle_request(request, webroot):
     """
     Handle one request and send response
 
-    stream: file descriptor for request
+    request: the request string
     webroot: string representation of webroot path
     """
-    data = stream.recv(MAX_REQUEST_SIZE)
-    try:
-        path, err = parse_url(data.decode("utf-8").rstrip("\r\n"), webroot)
+    path, err = parse_url(request, webroot)
 
-        if err:
-            resp = err
+    if err:
+        return err
 
-        elif not path.exists():
-            resp = create_response(51, "Not found")
+    while path.is_dir():
+        path = pathlib.Path(path, "index.gmi")
 
-        else:
+    if not path.exists():
+        resp = create_response(51, "Not found")
 
-            mime = get_mimetype(str(path))
-
-            with path.open("rb") as file_stream:
-                content = file_stream.read()
-                resp = create_response(20, mime, content)
-
-    except UnicodeError:
-        resp = create_response(59, "Bad encoding")
-
-    except PermissionError:
-        resp = create_response(51, "Access denied")
+    else:
+        mime = get_mimetype(str(path))
+        resp = create_response(20, mime, path)
 
     return resp
+
+
+def send_response(stream, resp):
+    """
+    Sends response over stream and logs it
+
+    stream: socket
+    addr: tuple representing requestor info
+    resp: response tuple (status, meta, path)
+    """
+    status, meta, path = resp
+
+    if path:
+        with path.open("rb") as file_stream:
+            body = file_stream.read()
+    else:
+        body = b""
+
+    response = f"{status} {meta}\r\n".encode() + body
+
+    stream.sendall(response)
+
+
+def log(req, addr, resp):
+    """
+    logs sessions to stdout
+
+    req: string representing request
+    addr: tuple containing source info
+    resp: response tuple
+    """
+    status, meta, path = resp
+    ipaddr, _, _, _ = addr
+
+    ipaddr = ip_address(ipaddr).ipv4_mapped or ipaddr
+
+    print(f"[{ipaddr}] {req} => {status} {meta} {path}")
 
 
 def thread_loop(queue, webroot):
@@ -171,18 +197,27 @@ def thread_loop(queue, webroot):
     webroot: string representation of webroot path
     """
     while True:
-        stream = queue.get()
+        request = queue.get()
 
-        if stream is None:
+        if request is None:
             break
+
+        stream, addr = request
 
         with stream:
             try:
-                resp = handle_request(stream, webroot)
+                data = stream.recv(MAX_REQUEST_SIZE).decode("utf-8").rstrip("\r\n")
+                resp = handle_request(data, webroot)
+            except PermissionError:
+                resp = create_response(51, "Access denied")
             except OSError:
                 resp = create_response(59, "Malformed request")
+            except UnicodeError:
+                resp = create_response(59, "Bad encoding")
+
             finally:
-                stream.sendall(resp)
+                log(data, addr, resp)
+                send_response(stream, resp)
 
 
 def start_threads(count, queue, webroot):
@@ -224,9 +259,11 @@ def server_loop(gemsocket, ssl_context, queue):
     """
     while True:
 
-        connsocket, _ = gemsocket.accept()
+        connsocket, addr = gemsocket.accept()
         stream = ssl_context.wrap_socket(connsocket, server_side=True)
-        queue.put(stream)
+
+        request = stream, addr
+        queue.put(request)
 
 
 def parse_args():
