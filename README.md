@@ -1,10 +1,13 @@
 # gemgem
 
-A basic, multi-threaded gemini server
+A minimal gemini server
 
-## WARNING
+## Features
 
-Do not use in production. I only wrote this to learn more about TCP/IP and Python sockets.
+- Serves static files
+- IPv6 support
+- Supports dropping privileges
+- Multi-threaded with adjustable queue size and thread number
 
 ## Requirements
 
