@@ -1,8 +1,6 @@
 #! /usr/bin/env python3
 """
 Minimalistic Gemini server
-
-!!! WARNING: Do not use in production !!!
 """
 from argparse import ArgumentParser
 from ipaddress import ip_address
@@ -260,10 +258,12 @@ def server_loop(gemsocket, ssl_context, queue):
     while True:
 
         connsocket, addr = gemsocket.accept()
-        stream = ssl_context.wrap_socket(connsocket, server_side=True)
-
-        request = stream, addr
-        queue.put(request)
+        try:
+            stream = ssl_context.wrap_socket(connsocket, server_side=True)
+            request = stream, addr
+            queue.put(request)
+        except ssl.SSLError as error:
+            print(f"[{addr[0]}] SSL Error: {error}")
 
 
 def parse_args():
