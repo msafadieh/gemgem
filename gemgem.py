@@ -5,8 +5,7 @@ Minimalistic Gemini server
 from argparse import ArgumentParser
 from ipaddress import ip_address
 import mimetypes
-from os import setgid, setuid
-import pathlib
+import os
 from queue import Queue
 import socket
 import ssl
@@ -103,10 +102,9 @@ def parse_url(raw_url, webroot):
         url_path += "/"
 
     decoded_path = url2pathname(url_path)
-    safe_path = urljoin(decoded_path, ".")
-    path_obj = pathlib.Path(webroot + "/" + safe_path)
-
-    return path_obj, None
+    safe_path = urljoin(decoded_path, ".").strip("/")
+    path = os.path.join(webroot, safe_path)
+    return path, None
 
 
 def get_mimetype(filename):
@@ -137,10 +135,10 @@ def handle_request(request, webroot):
     if err:
         return err
 
-    while path.is_dir():
-        path = pathlib.Path(path, "index.gmi")
+    while os.path.isdir(path):
+        path = os.path.join(path, "index.gmi")
 
-    if not path.exists():
+    if not os.path.exists(path):
         resp = create_response(51, "Not found")
 
     else:
@@ -161,7 +159,7 @@ def send_response(stream, resp):
     status, meta, path = resp
 
     if path:
-        with path.open("rb") as file_stream:
+        with open(path, "rb") as file_stream:
             body = file_stream.read()
     else:
         body = b""
@@ -313,12 +311,13 @@ def main():
     context = create_context(args.cert, args.key)
 
     if args.gid:
-        setgid(args.gid)
+        os.setgid(args.gid)
 
     if args.uid:
-        setuid(args.uid)
+        os.setuid(args.uid)
 
     queue = Queue(maxsize=args.queue)
+
     try:
         start_threads(args.threads, queue, args.webroot)
         with create_socket(args.host, args.port) as gemsocket:
